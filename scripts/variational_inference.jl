@@ -205,7 +205,6 @@ function log_likelihood(bnn::BayesianNeuralNetwork,x_samp::Float64,y_samp::Float
   log likelihood of the output layer,sample from gaussian PDF centered at y_samp with variance σ for a single data point in the training set
  """ 
   y_est = bnn.(x_samp)
-
   return log_likelihood(y_est,y_samp)
 end
 
@@ -218,7 +217,7 @@ function log_likelihood(bnn::BayesianNeuralNetwork,x_samp::AbstractArray{Float64
   return batch_ll
 end
 
-function elbo(bnn::BayesianNeuralNetwork,x_samp::AbstractArray{Float64},y_samp::Float64;n_samples = 10)
+function elbo(bnn::BayesianNeuralNetwork,x_samp::AbstractArray,y_samp::AbstractArray;n_samples = 10)
   """
   calculate the evidence lower bound
   """
@@ -232,19 +231,19 @@ function elbo(bnn::BayesianNeuralNetwork,x_samp::AbstractArray{Float64},y_samp::
   for i in 1:n_samples
     #generate the fist sample of the weights
     y_est_list = []#store the output of the network for each data point for a random weight sample
-    push!(y_est_list,bnn(x_samp[1];sample_weights = true))
+    push!(y_est_list,bnn(x_samp[1];sample_weights = true)[1][1])
     for i in 2:length(x_samp) #use the same weights for the entire batch
       push!(y_est_list,bnn(x_samp[i];sample_weights = false))
     end
     #compute the log likelihood of the output given weight sample i
-    log_likelihood_terms = map(x -> log_likelihood(x[1],x[2]),zip(y_est_list,y_samp)) 
+    log_likelihood_terms = map(x -> log_likelihood(x[1][1],x[2][1]),zip(y_est_list,y_samp)) 
     total_log_likelihood_i = sum(log_likelihood_terms)
 
     push!(log_priors,total_log_prior(bnn))
     push!(log_variational_posteriors,total_variational_posterior(bnn))
     push!(total_log_likelihoods,total_log_likelihood_i)
   end
-    F_i =  log_variational_posteriors -. log_priors .- total_log_likelihoods #Q: is this the likelihood or what? Should this be the mean or sum? 
+    F_i =  log_variational_posteriors .- log_priors .- total_log_likelihoods #Q: is this the likelihood or what? Should this be the mean or sum? 
 
     return mean(F_i) #Q: Should this be the mean or the sum
  
@@ -265,18 +264,19 @@ bnn = BayesianNeuralNetwork(10,1)
 input = rand(10)
 l = BayesianLinear(10,10)
 
+N = 15
+inputs = rand(10,N)
+
+output = sum(2 .* input.^2 .+ 3 .* input .+ 1 .+ randn(10,N),dims = 1)
+
+#create list of tuples with input and output 
+training_data = [(inputs[:,i],output[i]) for i in 1:N]
+training_input = [x[1] for x in training_data]
+training_output = [x[2] for x in training_data]
 
 
 
-
-N = 10
-input = rand(10)
-output = sum(2 .* input.^2 .+ 3 .* input .+ 1 .+ randn(1))
-
-
-bnn(input)
-
-elbo(bnn,input,output,n_samples = 10)
+elbo(bnn,training_input,training_output,n_samples = 10)
 
 
 
